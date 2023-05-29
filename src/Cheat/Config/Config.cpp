@@ -23,5 +23,3 @@ float cfg::off_color[]{ 0.f,0.f,0.f };
 float cfg::zoom_mult = 3.f;
 float cfg::alt_mult = 12.f;
 float cfg::shadow_mult = 20.f;
-
-//test i have zero fuck how do i use github bro upload this shits

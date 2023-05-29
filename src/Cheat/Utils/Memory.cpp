@@ -24,11 +24,12 @@ namespace memory
 	}
 }
 
-void memory::InitMemory() {
-	address::modulebase = (uintptr_t)GetModuleHandle(NULL);
+void memory::InitMemory() { // optimization
+	address::modulebase = reinterpret_cast<uintptr_t>(GetModuleHandle(nullptr));
 	std::vector<uintptr_t> offsets = GetOffsets(sigs::signatures);
-	int scrW = *(int*)(address::modulebase + offsets[3]);
-	int scrH = *(int*)(address::modulebase + offsets[3] + 0x4);
+
+	int scrW = *reinterpret_cast<int*>(address::modulebase + offsets[3]);
+	int scrH = *reinterpret_cast<int*>(address::modulebase + offsets[3] + 0x4);
 
 	offset::cGame = offsets[0];
 	offset::LocalPlayer = offsets[1];
@@ -38,9 +39,8 @@ void memory::InitMemory() {
 	offset::mat_addr = offsets[5];
 	offset::BombArray = offsets[6];
 	offset::RocketArray = offsets[7];
-	
-	scrsize = { (float)scrW, (float)scrH };
-	
-	address::cGame = *(uintptr_t*)(address::modulebase + offset::cGame);
-}
 
+	scrsize = { static_cast<float>(scrW), static_cast<float>(scrH) };
+
+	address::cGame = *reinterpret_cast<uintptr_t*>(address::modulebase + offset::cGame);
+}

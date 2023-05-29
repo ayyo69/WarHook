@@ -7,31 +7,19 @@
 #include <array>
 #include <format>
 
-bool WorldToScreen(const Vector3& in, Vector3& out)
+bool WorldToScreen(const Vector3& in, Vector3& out) // tidy up
 {
 	const uintptr_t mat_addr = memory::address::modulebase + memory::offset::mat_addr;
 	const ViewMatrix& mat = *reinterpret_cast<ViewMatrix*>(mat_addr);
 
-	float width = mat[0][3] * in.x + mat[1][3] * in.y + mat[2][3] * in.z + mat[3][3];
-
-	bool visible = width >= 0.1f;
-	if (!visible)
+	const float width = mat[0][3] * in.x + mat[1][3] * in.y + mat[2][3] * in.z + mat[3][3];
+	if (width < 0.1f)
 		return false;
-	else
-		width = 1.0f / width;
 
-	float x = in.x * mat[0][0] + in.y * mat[1][0] + in.z * mat[2][0] + mat[3][0];
-	float y = in.x * mat[0][1] + in.y * mat[1][1] + in.z * mat[2][1] + mat[3][1];
-	float z = in.x * mat[0][2] + in.y * mat[1][2] + in.z * mat[2][2] + mat[3][2];
-
-	float nx = x * width;
-	float ny = y * width;
-	float nz = z * width;
-
-
-	out.x = (memory::scrsize.x / 2 * nx) + (nx + memory::scrsize.x / 2);
-	out.y = -(memory::scrsize.y / 2 * ny) + (ny + memory::scrsize.y / 2);
-	out.z = nz;
+	const float inv_width = 1.0f / width;
+	out.x = (memory::scrsize.x / 2) * (in.x * mat[0][0] + in.y * mat[1][0] + in.z * mat[2][0] + mat[3][0]) * inv_width + (memory::scrsize.x / 2);
+	out.y = -(memory::scrsize.y / 2) * (in.x * mat[0][1] + in.y * mat[1][1] + in.z * mat[2][1] + mat[3][1]) * inv_width + (memory::scrsize.y / 2);
+	out.z = (in.x * mat[0][2] + in.y * mat[1][2] + in.z * mat[2][2] + mat[3][2]) * inv_width;
 
 	return true;
 }
@@ -139,7 +127,8 @@ void DrawBox(Matrix3x3 rotation, Vector3 bbmin, Vector3 bbmax, Vector3 position)
 
 }
 
-void DrawOffscreenIndicator(Vector3 origin, float distance)
+
+void DrawOffscreenIndicator(Vector3 origin, float distance) // this looks yanky but idc
 {
 	ImRect screen_rect = { 0.0f, 0.0f, memory::scrsize.x, memory::scrsize.y };
 	auto angle = atan2((memory::scrsize.y / 2) - origin.y, (memory::scrsize.x / 2) - origin.x);
@@ -149,13 +138,22 @@ void DrawOffscreenIndicator(Vector3 origin, float distance)
 		(memory::scrsize.x / 2) + cfg::off_radius * cosf(angle),
 		(memory::scrsize.y / 2) + cfg::off_radius * sinf(angle)
 	};
-	std::array<ImVec2, 4> points{
+
+	std::array<ImVec2, 4> points1{
 		ImVec2(-22.0f, -8.6f),
-		ImVec2(0.0f, 0.0f),
-		ImVec2(-22.0f, 8.6f),
-		ImVec2(-18.0f, 0.0f)
+			ImVec2(0.0f, 0.0f),
+			ImVec2(-22.0f, 8.6f),
+			ImVec2(-18.0f, 0.0f)
 	};
-	for (auto& point : points)
+
+	std::array<ImVec2, 4> points2{
+		ImVec2(-25.0f, -10.0f),
+			ImVec2(0.0f, 0.0f),
+			ImVec2(-25.0f, 10.0f),
+			ImVec2(-20.0f, 0.0f)
+	};
+
+	for (auto& point : points1)
 	{
 		auto x = point.x * cfg::off_arrow_size;
 		auto y = point.y * cfg::off_arrow_size;
@@ -163,6 +161,16 @@ void DrawOffscreenIndicator(Vector3 origin, float distance)
 		point.x = arrow_center.x + x * cosf(angle) - y * sinf(angle);
 		point.y = arrow_center.y + x * sinf(angle) + y * cosf(angle);
 	}
+
+	for (auto& point : points2)
+	{
+		auto x = point.x * cfg::off_arrow_size * 1.2f; // Adjust the size of the second arrow
+		auto y = point.y * cfg::off_arrow_size * 1.2f; // Adjust the size of the second arrow
+
+		point.x = arrow_center.x + x * cosf(angle) - y * sinf(angle);
+		point.y = arrow_center.y + x * sinf(angle) + y * cosf(angle);
+	}
+
 	auto draw = ImGui::GetBackgroundDrawList();
 	float alpha = 1.0f;
 	if (origin.z > 0)
@@ -178,11 +186,28 @@ void DrawOffscreenIndicator(Vector3 origin, float distance)
 	}
 	auto arrowColor = ImColor((int)(cfg::off_color[0] * 255.f), (int)(cfg::off_color[1] * 255.f), (int)(cfg::off_color[2] * 255.f));
 	arrowColor.Value.w = (std::min)(alpha, 1.0f);
-	draw->AddTriangleFilled(points[0], points[1], points[3], arrowColor);
-	draw->AddTriangleFilled(points[2], points[1], points[3], arrowColor);
-	draw->AddQuad(points[0], points[1], points[2], points[3], ImColor(0.0f, 0.0f, 0.0f, alpha), 0.6f);
-}
 
+	// Draw the first arrow
+	draw->AddTriangleFilled(points1[0], points1[1], points1[2], arrowColor);
+	draw->AddQuad(points1[0], points1[1], points1[2], points1[3], ImColor(0.0f, 0.0f, 0.0f, alpha));
+
+	// Draw the second arrow
+	draw->AddTriangleFilled(points2[0], points2[1], points2[2], arrowColor);
+	draw->AddQuad(points2[0], points2[1], points2[2], points2[3], ImColor(0.0f, 0.0f, 0.0f, alpha));
+
+	// Add a border to the arrows
+	float borderWidth = 1.5f;
+	ImColor borderColor(0.0f, 0.0f, 0.0f, alpha);
+	draw->AddLine(points1[0], points1[1], borderColor, borderWidth);
+	draw->AddLine(points1[1], points1[2], borderColor, borderWidth);
+	draw->AddLine(points1[2], points1[3], borderColor, borderWidth);
+	draw->AddLine(points1[3], points1[0], borderColor, borderWidth);
+
+	draw->AddLine(points2[0], points2[1], borderColor, borderWidth);
+	draw->AddLine(points2[1], points2[2], borderColor, borderWidth);
+	draw->AddLine(points2[2], points2[3], borderColor, borderWidth);
+	draw->AddLine(points2[3], points2[0], borderColor, borderWidth);
+}
 void DrawTextOnScreen(const ImVec2& position, const ImVec2& size, const std::string& text)
 {
 	auto draw = ImGui::GetBackgroundDrawList();
@@ -197,19 +222,24 @@ void DrawTextOnScreen(const ImVec2& position, const ImVec2& size, const std::str
 		text.c_str());
 }
 
-void DrawReloadBar(const ImVec2& position, int count, const ImVec2& size)// ALOT OF MAGIC NUMBERS HERE, I KNOW, BUT IT WORKS
+void DrawReloadBar(const ImVec2& position, int count, const ImVec2& size) // rounded reloadbar
 {
 	constexpr float stat = (10.f / 16);
-	float progress = ((stat * count) * 0.1f);
+	float progress = stat * count * 0.1f;
 
 	auto draw = ImGui::GetBackgroundDrawList();
-	ImVec2 startPos{ position.x - (size.x * 0.5f) - 5, position.y + 10 + (size.y * 0.5f) + 5 };
-	ImVec2 endPos{ position.x + (size.x * 0.5f) + 5, position.y + 10 + (size.y * 0.3f) + 10 };
-	ImVec2 fillEndPos{ position.x - (size.x * 0.5f) + (progress * size.x) + 5, position.y + 10 + (size.y * 0.5f) + 10 };
+	float barWidth = size.x + 10;
+	float barHeight = size.y * 0.3f + 10;
+	float fillWidth = progress * size.x + 5;
+	ImVec2 startPos = { position.x - barWidth * 0.5f, position.y + 10 + size.y * 0.5f + 5 };
+	ImVec2 endPos = { position.x + barWidth * 0.5f, startPos.y + barHeight };
+	ImVec2 fillEndPos = { startPos.x + fillWidth, endPos.y };
 
-	draw->AddRectFilled(startPos, endPos, ImColor(0, 0, 0, 150));
+	float cornerRadius = 5.0f;
+
+	draw->AddRectFilled(startPos, endPos, ImColor(0, 0, 0, 150), cornerRadius);
 	ImColor fillColor = (progress == 1) ? ImColor(0, 255, 0, 200) : ImColor(255, 0, 0, 200);
-	draw->AddRectFilled(startPos, fillEndPos, fillColor);
+	draw->AddRectFilled(startPos, fillEndPos, fillColor, cornerRadius);
 }
 
 bool IsUnitValid(Unit* unit, Unit* local)

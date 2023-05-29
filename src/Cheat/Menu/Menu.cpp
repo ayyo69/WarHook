@@ -116,7 +116,7 @@ void menu::showMenu() {
 	ImGui::PushFont(med_main);
 	ImGui::SetNextWindowSize({ 550,350 });
 	ImGui::SetNextWindowPos({ (memory::scrsize.x - 550) * 0.5f, (memory::scrsize.y - 350) * 0.5f }, ImGuiCond_FirstUseEver);
-	ImGui::Begin("WarHook", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize);
+	ImGui::Begin("WarHook Modified", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize);
 
 	ImGui::BeginTabBar("main");
 	ImGui::SetNextItemWidth(180.f);

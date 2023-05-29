@@ -25,6 +25,7 @@ ID3D11DepthStencilState* DepthStencilState_ORIG; //depth on
 ID3D11RasterizerState* DEPTHBIASState_FALSE;
 ID3D11RasterizerState* DEPTHBIASState_TRUE;
 ID3D11RasterizerState* DEPTHBIASState_ORIG;
+ID3D11RasterizerState* wireframeRasterizerState;
 
 //vertex
 ID3D11Buffer* veBuffer;
@@ -124,43 +125,60 @@ void InitDxStuff() {
 	nrasterizer_desc.MultisampleEnable = false;
 	nrasterizer_desc.AntialiasedLineEnable = false;
 	pDevice->CreateRasterizerState(&nrasterizer_desc, &DEPTHBIASState_TRUE);
+	
+	//create wireframe stuff
+
+	D3D11_RASTERIZER_DESC wireframeRasterizerDesc;
+	ZeroMemory(&wireframeRasterizerDesc, sizeof(wireframeRasterizerDesc));
+	wireframeRasterizerDesc.FillMode = D3D11_FILL_WIREFRAME;  // Set fill mode to wireframe
+	wireframeRasterizerDesc.CullMode = D3D11_CULL_NONE;
+	wireframeRasterizerDesc.FrontCounterClockwise = false;
+	wireframeRasterizerDesc.DepthBias = 0.0f;
+	wireframeRasterizerDesc.SlopeScaledDepthBias = 0.0f;
+	wireframeRasterizerDesc.DepthBiasClamp = 0.0f;
+	wireframeRasterizerDesc.DepthClipEnable = true;
+	wireframeRasterizerDesc.ScissorEnable = false;
+	wireframeRasterizerDesc.MultisampleEnable = false;
+	wireframeRasterizerDesc.AntialiasedLineEnable = false;
+	pDevice->CreateRasterizerState(&wireframeRasterizerDesc, &wireframeRasterizerState);
 	/////////////////////////////////////////////////////////////////////////////////
+
 }
 
 HRESULT __stdcall hookD3D11ResizeBuffers(IDXGISwapChain* pSwapChain, UINT BufferCount, UINT Width, UINT Height, DXGI_FORMAT NewFormat, UINT SwapChainFlags)
 {
-	if (mainRenderTargetView) {
-		pContext->OMSetRenderTargets(0, 0, 0);
+	if (mainRenderTargetView)
+	{
+		pContext->OMSetRenderTargets(0, nullptr, nullptr);
 		mainRenderTargetView->Release();
+		mainRenderTargetView = nullptr;
 	}
 
 	HRESULT hr = phookD3D11ResizeBuffers(pSwapChain, BufferCount, Width, Height, NewFormat, SwapChainFlags);
 
 	ID3D11Texture2D* pBuffer;
-	pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&pBuffer);
-
-	pDevice->CreateRenderTargetView(pBuffer, NULL, &mainRenderTargetView);
-
+	pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&pBuffer));
+	pDevice->CreateRenderTargetView(pBuffer, nullptr, &mainRenderTargetView);
 	pBuffer->Release();
+	pBuffer = nullptr;
 
-	pContext->OMSetRenderTargets(1, &mainRenderTargetView, NULL);
+	pContext->OMSetRenderTargets(1, &mainRenderTargetView, nullptr);
 
 	D3D11_VIEWPORT vp;
-	vp.Width = Width;
-	vp.Height = Height;
+	vp.Width = static_cast<float>(Width);
+	vp.Height = static_cast<float>(Height);
 	vp.MinDepth = 0.0f;
 	vp.MaxDepth = 1.0f;
 	vp.TopLeftX = 0;
 	vp.TopLeftY = 0;
-
 	pContext->RSSetViewports(1, &vp);
 
 	ImGuiIO& io = ImGui::GetIO();
-	io.DisplaySize = ImVec2((float)Width, (float)Height);
+	io.DisplaySize = ImVec2(static_cast<float>(Width), static_cast<float>(Height));
 	io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
 	ImGui::Render();
 
-	memory::scrsize = { (float)Width, (float)Height };
+	memory::scrsize = { static_cast<float>(Width), static_cast<float>(Height) };
 
 	return hr;
 }
@@ -168,65 +186,48 @@ HRESULT __stdcall hookD3D11ResizeBuffers(IDXGISwapChain* pSwapChain, UINT Buffer
 void __stdcall hookD3D11DrawIndexed(ID3D11DeviceContext* pContext, UINT IndexCount, UINT StartIndexLocation, INT BaseVertexLocation)
 {
 	pContext->IAGetVertexBuffers(0, 1, &veBuffer, &Stride, &veBufferOffset);
-	if (veBuffer != NULL)
+	if (veBuffer != nullptr)
+	{
 		veBuffer->GetDesc(&vedesc);
-	if (veBuffer != NULL) { veBuffer->Release(); veBuffer = NULL; }
-
+		veBuffer->Release();
+		veBuffer = nullptr;
+	}
 
 	pContext->IAGetIndexBuffer(&inBuffer, &inFormat, &inOffset);
-	if (inBuffer != NULL)
+	if (inBuffer != nullptr)
+	{
 		inBuffer->GetDesc(&indesc);
-	if (inBuffer != NULL) { inBuffer->Release(); inBuffer = NULL; }
+		inBuffer->Release();
+		inBuffer = nullptr;
+	}
 
 	pContext->PSGetConstantBuffers(pscStartSlot, 1, &pscBuffer);
-	if (pscBuffer != NULL)
+	if (pscBuffer != nullptr)
+	{
 		pscBuffer->GetDesc(&pscdesc);
-	if (pscBuffer != NULL) { pscBuffer->Release(); pscBuffer = NULL; }
-
+		pscBuffer->Release();
+		pscBuffer = nullptr;
+	}
 
 	pContext->VSGetConstantBuffers(vscStartSlot, 1, &vscBuffer);
-	if (vscBuffer != NULL)
+	if (vscBuffer != nullptr)
+	{
 		vscBuffer->GetDesc(&vscdesc);
-	if (vscBuffer != NULL) { vscBuffer->Release(); vscBuffer = NULL; }
-
-	/*if (GetAsyncKeyState(VK_NUMPAD1) & 1)
-	{
-		nstride += 1;
-		printf("Stride: %d \n", nstride);
+		vscBuffer->Release();
+		vscBuffer = nullptr;
 	}
-	if (GetAsyncKeyState(VK_NUMPAD4) & 1)
-	{
-		nstride -= 1;
-		printf("Stride: %d \n", nstride);
-	}
-	if (GetAsyncKeyState(VK_NUMPAD2) & 1)
-	{
-		count += 1;
-		printf("Count: %d \n", count);
-	}
-	if (GetAsyncKeyState(VK_NUMPAD5) & 1)
-	{
-		count -= 1;
-		printf("Count: %d \n", count);
-	}
-	*/
 
 	if (cfg::remove_smokes)
 	{
 		if (Stride == 0 && IndexCount == 6)
 		{
-			pContext->RSSetState(DEPTHBIASState_FALSE);
+			pContext->RSSetState(wireframeRasterizerState);
 			phookD3D11DrawIndexed(pContext, IndexCount, StartIndexLocation, BaseVertexLocation);
 			pContext->RSSetState(DEPTHBIASState_TRUE);
+			return;
 		}
 	}
 
-
-	if (cfg::remove_smokes)
-	{
-		if (Stride == 0 && IndexCount == 6)
-			return;
-	}
 
 	return phookD3D11DrawIndexed(pContext, IndexCount, StartIndexLocation, BaseVertexLocation);
 
@@ -236,40 +237,49 @@ void __stdcall hookD3D11DrawIndexedInstanced(ID3D11DeviceContext* pContext, UINT
 {
 
 	pContext->IAGetVertexBuffers(0, 1, &veBuffer, &Stride, &veBufferOffset);
-	if (veBuffer != NULL)
+	if (veBuffer != nullptr)
+	{
 		veBuffer->GetDesc(&vedesc);
-	if (veBuffer != NULL) { veBuffer->Release(); veBuffer = NULL; }
+		veBuffer->Release();
+		veBuffer = nullptr;
+	}
 
 	pContext->IAGetIndexBuffer(&inBuffer, &inFormat, &inOffset);
-	if (inBuffer != NULL)
+	if (inBuffer != nullptr)
+	{
 		inBuffer->GetDesc(&indesc);
-	if (inBuffer != NULL) { inBuffer->Release(); inBuffer = NULL; }
-	
+		inBuffer->Release();
+		inBuffer = nullptr;
+	}
+
 	pContext->PSGetConstantBuffers(pscStartSlot, 1, &pscBuffer);
-	if (pscBuffer != NULL)
+	if (pscBuffer != nullptr)
+	{
 		pscBuffer->GetDesc(&pscdesc);
-	if (pscBuffer != NULL) { pscBuffer->Release(); pscBuffer = NULL; }
+		pscBuffer->Release();
+		pscBuffer = nullptr;
+	}
 
 	pContext->VSGetConstantBuffers(vscStartSlot, 1, &vscBuffer);
-	if (vscBuffer != NULL)
+	if (vscBuffer != nullptr)
+	{
 		vscBuffer->GetDesc(&vscdesc);
-	if (vscBuffer != NULL) { vscBuffer->Release(); vscBuffer = NULL; }
+		vscBuffer->Release();
+		vscBuffer = nullptr;
+	}
+
 
 	if (cfg::remove_smokes)
 	{
 		if (Stride == 0 && IndexCountPerInstance == 6)
 		{
-			pContext->RSSetState(DEPTHBIASState_FALSE); //depthbias off
+			pContext->RSSetState(wireframeRasterizerState); //depthbias off
 			phookD3D11DrawIndexedInstanced(pContext, IndexCountPerInstance, InstanceCount, StartIndexLocation, BaseVertexLocation, StartInstanceLocation); //redraw
 			pContext->RSSetState(DEPTHBIASState_TRUE); //depthbias true
+			return;
 		}
 	}
 
-	if (cfg::remove_smokes)
-	{
-		if (Stride == 0 && IndexCountPerInstance == 6)
-			return;
-	}
 
 	return phookD3D11DrawIndexedInstanced(pContext, IndexCountPerInstance, InstanceCount, StartIndexLocation, BaseVertexLocation, StartInstanceLocation);
 }
@@ -315,36 +325,41 @@ HRESULT __stdcall hkPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
 			memory::InitMemory();
 			InitDxStuff();
 			init = true;
-
 		}
-
 		else
+		{
 			return oPresent(pSwapChain, SyncInterval, Flags);
+		}
 	}
-	
+
 	ImGui_ImplDX11_NewFrame();
 	ImGui_ImplWin32_NewFrame();
 	ImGui::NewFrame();
 	ImGui::GetIO().MouseDrawCursor = menu::open;
+
 	if (GetAsyncKeyState(VK_INSERT) & 1)
 	{
 		menu::open = !menu::open;
 	}
+
 #ifdef _DEBUG
 	menu::agree = true;
 #endif // _DEBUG
+
 	if (!menu::agree)
+	{
 		menu::showWarningwindow();
-	
-	if (menu::agree)
+	}
+	else
 	{
 		if (menu::open)
 		{
 			menu::showMenu();
 		}
 	}
+
 #ifdef _DEBUG
-	if(cfg::esp_status)
+	if (cfg::esp_status)
 		debug();
 #endif // _DEBUG
 
@@ -352,9 +367,9 @@ HRESULT __stdcall hkPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
 	Misc();
 
 	ImGui::Render();
-	
 
 	pContext->OMSetRenderTargets(1, &mainRenderTargetView, NULL);
 	ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+
 	return oPresent(pSwapChain, SyncInterval, Flags);
 }
